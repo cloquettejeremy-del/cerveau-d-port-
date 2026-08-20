@@ -99,7 +99,10 @@ function initSpeech() {
   if (!SR) return null;
   const r = new SR();
   r.lang = "fr-FR";
-  r.continuous = true;
+  // Le mode "continu" (continuous=true) est peu fiable sur Chrome Android : il redémarre
+  // en boucle tout seul et répète des bouts de phrase, surtout avec du bruit de fond.
+  // Une phrase par écoute est plus lent mais fiable ; on retouche le micro pour continuer.
+  r.continuous = false;
   r.interimResults = true;
   return r;
 }
@@ -118,34 +121,45 @@ function setupMic() {
   }
 
   let finalText = "";
+  let finalizedThisSession = false;
 
   recognition.onresult = (event) => {
     let interim = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const chunk = event.results[i][0].transcript;
-      if (event.results[i].isFinal) finalText += chunk + " ";
-      else interim += chunk;
+      // continuous=false : normalement un seul résultat final par écoute, mais on se
+      // protège quand même d'un éventuel doublon envoyé deux fois par le navigateur.
+      if (event.results[i].isFinal) {
+        if (!finalizedThisSession) {
+          finalText += chunk + " ";
+          finalizedThisSession = true;
+        }
+      } else {
+        interim += chunk;
+      }
     }
     transcript.textContent = (finalText + interim).trim();
     updateNextButton();
   };
 
   recognition.onerror = () => {
-    stopRecording();
+    resetMicUI();
   };
 
+  // Pas de redémarrage automatique ici : sur Chrome Android, relancer en boucle
+  // provoque des répétitions. L'écoute s'arrête simplement ; on retouche le micro
+  // pour dicter la suite (le texte déjà transcrit est conservé).
   recognition.onend = () => {
-    if (isRecording) {
-      // certains navigateurs coupent après un silence : on relance
-      try { recognition.start(); } catch (e) { stopRecording(); }
-    }
+    resetMicUI();
   };
 
   micBtn.addEventListener("click", () => {
     if (isRecording) {
-      stopRecording();
+      try { recognition.stop(); } catch (e) {}
+      resetMicUI();
     } else {
       finalText = transcript.textContent ? transcript.textContent + " " : "";
+      finalizedThisSession = false;
       startRecording();
     }
   });
@@ -154,14 +168,13 @@ function setupMic() {
     isRecording = true;
     micBtn.classList.add("recording");
     micHint.textContent = "Écoute… touche pour arrêter";
-    try { recognition.start(); } catch (e) {}
+    try { recognition.start(); } catch (e) { resetMicUI(); }
   }
 
-  function stopRecording() {
+  function resetMicUI() {
     isRecording = false;
     micBtn.classList.remove("recording");
     micHint.textContent = "Touche pour parler";
-    try { recognition.stop(); } catch (e) {}
   }
 }
 
@@ -489,15 +502,20 @@ async function sendItemToOutlook(item, interactive = false) {
     const isAllDay = !item.hasTime;
     let eventBody;
     if (isAllDay) {
-      // Événement "jour entier" : pas d'heure arbitraire, juste la date.
-      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-      const endDay = new Date(startDay.getTime() + 24 * 60 * 60 * 1000);
+      // Événement "jour entier" : Microsoft Graph attend le début/la fin en UTC pur
+      // (minuit UTC) pour les événements isAllDay. Passer le fuseau local ici est un
+      // piège connu de l'API : l'événement peut alors se décaler d'un jour dans Outlook.
+      const pad = (n) => String(n).padStart(2, "0");
+      const y = start.getFullYear(), mo = start.getMonth(), d = start.getDate();
+      const startStr = `${y}-${pad(mo + 1)}-${pad(d)}T00:00:00.000`;
+      const nextDay = new Date(y, mo, d + 1);
+      const endStr = `${nextDay.getFullYear()}-${pad(nextDay.getMonth() + 1)}-${pad(nextDay.getDate())}T00:00:00.000`;
       eventBody = {
         subject: item.text.slice(0, 120),
         body: { contentType: "text", content: item.text },
         isAllDay: true,
-        start: { dateTime: localISOString(startDay), timeZone: tz() },
-        end: { dateTime: localISOString(endDay), timeZone: tz() },
+        start: { dateTime: startStr, timeZone: "UTC" },
+        end: { dateTime: endStr, timeZone: "UTC" },
         categories: categoryLabels,
       };
     } else {
