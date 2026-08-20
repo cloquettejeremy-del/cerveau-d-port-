@@ -377,7 +377,10 @@ async function login() {
     return;
   }
   try {
-    await msalInstance.loginRedirect({ scopes: GRAPH_SCOPES });
+    // prompt: "select_account" force Microsoft à toujours proposer un choix explicite de
+    // compte, plutôt que de réutiliser silencieusement un compte personnel déjà en mémoire
+    // dans le navigateur (cause du bug où les événements partaient sur le mauvais compte).
+    await msalInstance.loginRedirect({ scopes: GRAPH_SCOPES, prompt: "select_account" });
   } catch (e) {
     alert("Connexion impossible : " + e.message);
   }
