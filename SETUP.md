@@ -16,7 +16,7 @@ Il te faut une adresse en `https://` pour que Microsoft accepte de s'y connecter
 ### Option simple : GitHub Pages (gratuit, recommandé si tu as déjà un compte GitHub)
 
 1. Crée un nouveau dépôt sur [github.com](https://github.com) (ex: `decharge-mentale`), public.
-2. Mets-y tous les fichiers de ce dossier (`index.html`, `style.css`, `app.js`, `sw.js`, `manifest.webmanifest`, le dossier `icons/`).
+2. Mets-y tous les fichiers de ce dossier (`index.html`, `style.css`, `app.js`, `sw.js`, `manifest.json`, le dossier `icons/`).
 3. Dans le dépôt : **Settings → Pages → Source : "Deploy from a branch"**, branche `main`, dossier `/root` → Save.
 4. Après une minute, ton app est disponible à une adresse du type :
    `https://TON-PSEUDO.github.io/decharge-mentale/`

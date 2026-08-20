@@ -1,10 +1,10 @@
-const CACHE_NAME = "decharge-mentale-v1";
+const CACHE_NAME = "decharge-mentale-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
-  "./manifest.webmanifest",
+  "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];
