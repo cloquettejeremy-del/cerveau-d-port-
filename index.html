@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f172a" />
+<title>Décharge mentale</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===== ECRAN PRINCIPAL : CAPTURE ===== -->
+  <main id="screen-capture" class="screen">
+    <header class="topbar">
+      <button id="btn-settings" class="icon-btn" aria-label="Réglages">⚙️</button>
+      <div class="title">🧠 Décharge mentale</div>
+      <button id="btn-journal" class="icon-btn" aria-label="Journal">
+        📋<span id="pending-badge" class="badge hidden">0</span>
+      </button>
+    </header>
+
+    <div id="auth-banner" class="banner hidden">
+      <span>Connecte ton compte Microsoft pour envoyer vers Outlook.</span>
+      <button id="btn-login" class="btn-small">Se connecter</button>
+    </div>
+
+    <div class="capture-zone">
+      <div id="live-transcript" class="transcript" contenteditable="true" data-placeholder="Touche le micro et parle, ou écris ici…"></div>
+
+      <div class="mic-wrap">
+        <button id="btn-mic" class="mic-btn" aria-label="Enregistrer">🎤</button>
+        <div id="mic-hint" class="mic-hint">Touche pour parler</div>
+      </div>
+
+      <button id="btn-next" class="btn-primary" disabled>Continuer →</button>
+    </div>
+
+    <div class="quick-cats" id="quick-cats"></div>
+  </main>
+
+  <!-- ===== ECRAN CONFIRMATION ===== -->
+  <section id="screen-confirm" class="screen hidden">
+    <header class="topbar">
+      <button id="btn-back-confirm" class="icon-btn" aria-label="Retour">←</button>
+      <div class="title">Vérifie et envoie</div>
+      <div style="width:2.2rem"></div>
+    </header>
+
+    <div class="confirm-body">
+      <textarea id="confirm-text" class="confirm-text" rows="3"></textarea>
+
+      <div class="field">
+        <label>Catégorie</label>
+        <div id="confirm-cats" class="chip-row"></div>
+      </div>
+
+      <div class="field">
+        <label>Type</label>
+        <div class="chip-row">
+          <button class="chip" data-type="task">✅ Tâche</button>
+          <button class="chip" data-type="event">📅 Événement</button>
+          <button class="chip" data-type="shopping">🛒 Courses</button>
+        </div>
+      </div>
+
+      <div class="field" id="date-field">
+        <label id="date-label">Quand</label>
+        <input type="datetime-local" id="confirm-datetime" />
+        <label class="checkbox-row"><input type="checkbox" id="confirm-allday" /> Toute la journée / pas d'heure précise</label>
+      </div>
+
+      <button id="btn-save" class="btn-primary">Envoyer vers Outlook ✅</button>
+      <div id="save-status" class="save-status"></div>
+    </div>
+  </section>
+
+  <!-- ===== ECRAN JOURNAL ===== -->
+  <section id="screen-journal" class="screen hidden">
+    <header class="topbar">
+      <button id="btn-back-journal" class="icon-btn" aria-label="Retour">←</button>
+      <div class="title">Journal</div>
+      <button id="btn-retry-all" class="icon-btn" aria-label="Réessayer tout">🔄</button>
+    </header>
+    <div id="journal-list" class="journal-list"></div>
+  </section>
+
+  <!-- ===== ECRAN REGLAGES ===== -->
+  <section id="screen-settings" class="screen hidden">
+    <header class="topbar">
+      <button id="btn-back-settings" class="icon-btn" aria-label="Retour">←</button>
+      <div class="title">Réglages</div>
+      <div style="width:2.2rem"></div>
+    </header>
+
+    <div class="settings-body">
+      <div class="field">
+        <label>Compte Microsoft</label>
+        <div id="account-status" class="account-status">Non connecté</div>
+        <div class="btn-row">
+          <button id="btn-login2" class="btn-secondary">Se connecter</button>
+          <button id="btn-logout" class="btn-secondary">Se déconnecter</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Client ID Azure (Application ID)</label>
+        <input id="client-id-input" type="text" placeholder="colle ton Client ID ici" />
+        <p class="hint">Voir le guide SETUP.md pour créer ce Client ID (5 min, gratuit).</p>
+      </div>
+
+      <div class="field">
+        <label>Mes catégories (entreprises / perso)</label>
+        <div id="categories-editor"></div>
+        <button id="btn-add-category" class="btn-secondary">+ Ajouter une catégorie</button>
+        <p class="hint">Mots-clés séparés par des virgules. Si un mot-clé est reconnu dans ce que tu dis, la catégorie est proposée automatiquement.</p>
+      </div>
+
+      <div class="field">
+        <label class="checkbox-row"><input type="checkbox" id="quick-mode" /> Mode rapide (envoi auto après 4s sans y toucher)</label>
+      </div>
+
+      <button id="btn-save-settings" class="btn-primary">Enregistrer les réglages</button>
+    </div>
+  </section>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
