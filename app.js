@@ -15,9 +15,9 @@ const STORE_KEYS = {
 
 const DEFAULT_CATEGORIES = [
   { id: "perso", label: "Perso", color: "preset10", keywords: ["maison", "courses", "enfant", "enfants", "famille"] },
-  { id: "entreprise1", label: "Entreprise 1", color: "preset1", keywords: [] },
-  { id: "entreprise2", label: "Entreprise 2", color: "preset5", keywords: [] },
-  { id: "entreprise3", label: "Entreprise 3", color: "preset20", keywords: [] },
+  { id: "entreprise1", label: "Jambes-Machines", color: "preset1", keywords: ["jambes-machines", "jambes machines"] },
+  { id: "entreprise2", label: "Roger Bauwens", color: "preset5", keywords: ["roger bauwens", "bauwens"] },
+  { id: "entreprise3", label: "Baudouin Vergote", color: "preset20", keywords: ["baudouin vergote", "vergote"] },
 ];
 
 // Couleurs Outlook "preset" disponibles côté Graph (masterCategories)
@@ -41,6 +41,19 @@ const SHOPPING_KEYWORDS = [
   "acheter", "racheter", "recommander", "commander", "prendre au magasin",
   "il faut du", "il faut de la", "il faut des", "au supermarché", "à la pharmacie",
   "courses", "faire les courses",
+];
+
+// Mots-clés qu'on peut dire explicitement pour trancher soi-même (priorité sur la détection auto)
+const EXPLICIT_TASK_KEYWORDS = ["tâche", "tache", "todo", "to-do", "à faire", "a faire"];
+const EXPLICIT_EVENT_KEYWORDS = ["rendez-vous", "rendez vous", "rdv", "calendrier", "événement", "evenement", "meeting", "réunion", "reunion"];
+
+// Verbes d'action qui, combinés à une date, indiquent plutôt une tâche avec échéance
+// qu'un rendez-vous ("rappeler le 5" = tâche, "visite le 5" = événement)
+const TASK_ACTION_VERBS = [
+  "rappeler", "appeler", "envoyer", "préparer", "preparer", "finir", "terminer",
+  "relancer", "commander", "réserver", "reserver", "payer", "contacter", "répondre",
+  "repondre", "valider", "vérifier", "verifier", "confirmer", "transmettre",
+  "demander", "récupérer", "recuperer", "renvoyer",
 ];
 
 // ---------- Utilitaires stockage ----------
@@ -161,10 +174,17 @@ function updateNextButton() {
 // 2. ANALYSE DU TEXTE : type (tâche / événement / courses) + date
 // ============================================================
 const WEEKDAYS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
-const MONTHS = ["janvier","février","fevrier","mars","avril","mai","juin","juillet","août","aout","septembre","octobre","novembre","décembre","decembre"];
+// Chaque entrée : [nom(s) reconnus, index du mois 0-11]. Les variantes avec/sans accent
+// pointent explicitement vers le bon mois (pas de calcul par modulo, source du bug précédent).
+const MONTHS = [
+  ["janvier", 0], ["février", 1], ["fevrier", 1], ["mars", 2], ["avril", 3],
+  ["mai", 4], ["juin", 5], ["juillet", 6], ["août", 7], ["aout", 7],
+  ["septembre", 8], ["octobre", 9], ["novembre", 10], ["décembre", 11], ["decembre", 11],
+];
 
 function parseFrenchDateTime(text, now = new Date()) {
   const t = text.toLowerCase();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let date = null;
   let hasTime = false;
 
@@ -212,14 +232,13 @@ function parseFrenchDateTime(text, now = new Date()) {
     }
   }
   if (!date) {
-    for (let i = 0; i < MONTHS.length; i++) {
-      const re = new RegExp("\\b(\\d{1,2})\\s+" + MONTHS[i] + "\\b");
+    for (const [name, monthIndex] of MONTHS) {
+      const re = new RegExp("\\b(\\d{1,2})\\s+" + name + "\\b");
       m = t.match(re);
       if (m) {
         const day = parseInt(m[1], 10);
-        const monthIndex = i % 12;
         date = new Date(now.getFullYear(), monthIndex, day);
-        if (date < now) date.setFullYear(date.getFullYear() + 1);
+        if (date < todayMidnight) date.setFullYear(date.getFullYear() + 1);
         break;
       }
     }
@@ -258,14 +277,27 @@ function detectCategory(text, categories) {
 
 function analyzeText(text) {
   const categories = getCategories();
+  const t = text.toLowerCase();
   const shopping = detectShopping(text);
   const dateInfo = parseFrenchDateTime(text);
   const categoryId = detectCategory(text, categories) || categories[0]?.id || null;
 
+  const explicitTask = EXPLICIT_TASK_KEYWORDS.some((k) => t.includes(k));
+  const explicitEvent = EXPLICIT_EVENT_KEYWORDS.some((k) => t.includes(k));
+  const hasTaskVerb = TASK_ACTION_VERBS.some((v) => t.includes(v));
+
   let type = "task";
-  if (shopping) type = "shopping";
-  else if (dateInfo && dateInfo.hasTime) type = "event";
-  else if (dateInfo && !dateInfo.hasTime) type = "task"; // date sans heure -> tâche avec échéance
+  if (explicitTask) {
+    type = "task";
+  } else if (explicitEvent) {
+    type = "event";
+  } else if (shopping) {
+    type = "shopping";
+  } else if (dateInfo) {
+    // une date détectée => plutôt un événement (visite, rdv...), sauf si le texte
+    // contient un verbe d'action typique d'une tâche ("rappeler le 5" = tâche)
+    type = hasTaskVerb ? "task" : "event";
+  }
 
   return { type, categoryId, dateInfo };
 }
@@ -316,7 +348,18 @@ async function initMsal() {
 
 async function login() {
   if (!msalInstance) {
-    alert("Renseigne d'abord ton Client ID Azure dans Réglages.");
+    if (!getClientId()) {
+      alert("Renseigne d'abord ton Client ID Azure dans Réglages.");
+    } else if (!window.msal) {
+      alert(
+        "La bibliothèque de connexion Microsoft n'a pas pu se charger (réseau/pare-feu ?). " +
+        "Vérifie ta connexion internet et recharge la page. Si ça persiste sur un réseau " +
+        "professionnel, il faudra peut-être demander à ton service informatique de débloquer " +
+        "cdn.jsdelivr.net."
+      );
+    } else {
+      alert("La connexion n'est pas encore prête, réessaie dans un instant.");
+    }
     openScreen("settings");
     return;
   }
@@ -443,16 +486,33 @@ async function sendItemToOutlook(item, interactive = false) {
 
   if (item.type === "event") {
     const start = new Date(item.dateISO);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
-    await graphFetch("/me/events", {
-      method: "POST",
-      body: JSON.stringify({
+    const isAllDay = !item.hasTime;
+    let eventBody;
+    if (isAllDay) {
+      // Événement "jour entier" : pas d'heure arbitraire, juste la date.
+      const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const endDay = new Date(startDay.getTime() + 24 * 60 * 60 * 1000);
+      eventBody = {
+        subject: item.text.slice(0, 120),
+        body: { contentType: "text", content: item.text },
+        isAllDay: true,
+        start: { dateTime: localISOString(startDay), timeZone: tz() },
+        end: { dateTime: localISOString(endDay), timeZone: tz() },
+        categories: categoryLabels,
+      };
+    } else {
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      eventBody = {
         subject: item.text.slice(0, 120),
         body: { contentType: "text", content: item.text },
         start: { dateTime: localISOString(start), timeZone: tz() },
         end: { dateTime: localISOString(end), timeZone: tz() },
         categories: categoryLabels,
-      }),
+      };
+    }
+    await graphFetch("/me/events", {
+      method: "POST",
+      body: JSON.stringify(eventBody),
     }, interactive);
   } else {
     const listId = await ensureTaskList(interactive);
